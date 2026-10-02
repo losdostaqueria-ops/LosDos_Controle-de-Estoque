@@ -1,3 +1,4 @@
+// app.js
 import { Store } from './modules/storage.js';
 import { renderDashboard } from './modules/dashboard.js';
 import { renderProdutos } from './modules/produtos.js';
@@ -6,7 +7,8 @@ import { renderRequisicoes } from './modules/requisicoes.js';
 import { renderEntradas } from './modules/entradas.js';
 import { renderComprar } from './modules/comprar.js';
 import { renderRanking } from './modules/ranking.js';
-import { toast, openModal, closeModal } from './modules/utils.js';
+import { renderLogin, watchAuth, logout } from './modules/auth.js';
+import { toast, closeModal } from './modules/utils.js';
 
 const views = {
   dashboard: { title: 'Dashboard', subtitle: 'Visão geral em tempo real', render: renderDashboard },
@@ -35,12 +37,10 @@ function render() {
   views[currentView].render(container, { refresh: render, navigate });
 }
 
-// Navegação
 document.querySelectorAll('.nav-item').forEach(btn => {
   btn.addEventListener('click', () => navigate(btn.dataset.view));
 });
 
-// Busca global
 document.getElementById('globalSearch').addEventListener('input', (e) => {
   const term = e.target.value.toLowerCase();
   document.querySelectorAll('tbody tr').forEach(tr => {
@@ -48,7 +48,6 @@ document.getElementById('globalSearch').addEventListener('input', (e) => {
   });
 });
 
-// Export / Import
 document.getElementById('btnExport').addEventListener('click', () => {
   const data = JSON.stringify(Store.export(), null, 2);
   const blob = new Blob([data], { type: 'application/json' });
@@ -65,14 +64,14 @@ document.getElementById('btnImport').addEventListener('click', () => {
   document.getElementById('fileInput').click();
 });
 
-document.getElementById('fileInput').addEventListener('change', (e) => {
+document.getElementById('fileInput').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = (ev) => {
+  reader.onload = async (ev) => {
     try {
       const data = JSON.parse(ev.target.result);
-      Store.import(data);
+      await Store.import(data);
       toast('Dados importados com sucesso!', 'success');
       render();
     } catch (err) {
@@ -82,11 +81,59 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
   reader.readAsText(file);
 });
 
-// Modal close
 document.getElementById('modalOverlay').addEventListener('click', (e) => {
   if (e.target.id === 'modalOverlay') closeModal();
 });
 
-// Init
-render();
-toast('Bem-vindo ao Los Dos! 👋', 'success');
+function injectLogoutButton() {
+  const actions = document.querySelector('.topbar-actions');
+  if (!actions || document.getElementById('btnLogout')) return;
+  const btn = document.createElement('button');
+  btn.id = 'btnLogout';
+  btn.className = 'btn-icon';
+  btn.title = 'Sair';
+  btn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h8v-2H4V5z"/></svg>`;
+  btn.onclick = async () => {
+    if (!confirm('Deseja sair?')) return;
+    await logout();
+  };
+  actions.appendChild(btn);
+}
+
+function showApp() {
+  document.querySelector('.sidebar').style.display = '';
+  document.querySelector('.main').style.display = '';
+  document.querySelector('.login-wrap')?.remove();
+  injectLogoutButton();
+  render();
+}
+
+function showLogin() {
+  document.querySelector('.sidebar').style.display = 'none';
+  document.querySelector('.main').style.display = 'none';
+  const existing = document.querySelector('.login-wrap');
+  if (existing) return;
+  const container = document.createElement('div');
+  document.body.appendChild(container);
+  renderLogin(container, () => {
+    container.remove();
+    showApp();
+  });
+}
+
+// Boot
+watchAuth(async (user) => {
+  if (user) {
+    try {
+      await Store.init();
+      document.querySelector('.login-wrap')?.remove();
+      showApp();
+    } catch (err) {
+      console.error(err);
+      toast('Erro ao carregar dados', 'error');
+    }
+  } else {
+    document.getElementById('btnLogout')?.remove();
+    showLogin();
+  }
+});
