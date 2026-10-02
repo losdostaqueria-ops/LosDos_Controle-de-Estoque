@@ -1,4 +1,11 @@
-const KEY = 'losdos_data_v1';
+// modules/storage.js
+import { db } from './firebase.js';
+import {
+  doc, getDoc, setDoc
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+const DOC_ID = 'losdos_data';
+const COLLECTION = 'app';
 
 const defaultData = {
   produtos: [],
@@ -11,44 +18,73 @@ const defaultData = {
   entABSP: []
 };
 
-export const Store = {
-  _data: null,
+let _data = null;
+let _loaded = false;
+let _saveTimer = null;
 
-  load() {
-    if (this._data) return this._data;
+export const Store = {
+  async init() {
+    if (_loaded) return _data;
     try {
-      const raw = localStorage.getItem(KEY);
-      this._data = raw ? { ...defaultData, ...JSON.parse(raw) } : structuredClone(defaultData);
-    } catch {
-      this._data = structuredClone(defaultData);
+      const ref = doc(db, COLLECTION, DOC_ID);
+      const snap = await getDoc(ref);
+      if (snap.exists()) {
+        _data = { ...defaultData, ...snap.data() };
+      } else {
+        _data = structuredClone(defaultData);
+        await setDoc(ref, _data);
+      }
+    } catch (err) {
+      console.error('Erro ao carregar do Firestore:', err);
+      _data = structuredClone(defaultData);
     }
-    return this._data;
+    _loaded = true;
+    return _data;
   },
 
-  save() {
-    localStorage.setItem(KEY, JSON.stringify(this._data));
+  async save() {
+    if (!_data) return;
+    // debounce: evita múltiplas gravações seguidas
+    clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(async () => {
+      try {
+        const ref = doc(db, COLLECTION, DOC_ID);
+        await setDoc(ref, _data);
+      } catch (err) {
+        console.error('Erro ao salvar no Firestore:', err);
+      }
+    }, 400);
   },
 
   get(key) {
-    return this.load()[key];
+    if (!_data) return defaultData[key] || [];
+    return _data[key];
   },
 
-  set(key, value) {
-    this.load()[key] = value;
-    this.save();
+  async set(key, value) {
+    if (!_data) await this.init();
+    _data[key] = value;
+    await this.save();
   },
 
   export() {
-    return this.load();
+    return _data || defaultData;
   },
 
-  import(data) {
-    this._data = { ...defaultData, ...data };
-    this.save();
+  async import(data) {
+    _data = { ...defaultData, ...data };
+    await this.save();
   },
 
-  reset() {
-    this._data = structuredClone(defaultData);
-    this.save();
+  async reset() {
+    _data = structuredClone(defaultData);
+    await this.save();
+  },
+
+  // força recarregar do Firestore (útil se outra pessoa mudou)
+  async refresh() {
+    _loaded = false;
+    _data = null;
+    return await this.init();
   }
 };
