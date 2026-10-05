@@ -1,5 +1,6 @@
 import { Store } from './storage.js';
 import { toast, openModal, closeModal, escapeHtml, uid } from './utils.js';
+import { escanearCodigo } from '../scanner.js';
 
 export function renderProdutos(container, ctx) {
   const produtos = Store.get('produtos');
@@ -84,17 +85,22 @@ export function renderProdutos(container, ctx) {
           </div>
           <div class="field"><label>Categoria</label>
             <select name="categoria">
-              ${['Hortifruti','Hortifruti Colaborador','Secos','Secos Bar','Itens Diversos','Diversos'].map(c => `<option ${p.categoria===c?'selected':''}>${c}</option>`).join('')}
+              ${['Hortifruti','Hortifruti Colaborador','Secos','Secos Bar','Itens Diversos','Limpeza/Descartáveis','Diversos'].map(c => `<option ${p.categoria===c?'selected':''}>${c}</option>`).join('')}
             </select>
           </div>
           <div class="field"><label>Unidade</label>
             <select name="unidade">
-              ${['UN','KG','G','L','ML','CX','PCT','FD','DZ','BDJ'].map(u => `<option ${p.unidade===u?'selected':''}>${u}</option>`).join('')}
+              ${['UN','KG','G','L','ML','CX','PCT','FD','DZ','BDJ','GL','RL','PAR'].map(u => `<option ${p.unidade===u?'selected':''}>${u}</option>`).join('')}
             </select>
           </div>
           <div class="field"><label>Estoque Mínimo</label><input type="number" name="minimo" value="${p.minimo}" min="0" step="0.01" /></div>
           <div class="field"><label>Fornecedor</label><input name="fornecedor" value="${escapeHtml(p.fornecedor)}" /></div>
-          <div class="field"><label>Código de Barras *</label><input name="codigo" required value="${escapeHtml(p.codigo)}" /></div>
+          <div class="field"><label>Código de Barras *</label>
+            <div style="display:flex; gap:8px;">
+              <input name="codigo" required value="${escapeHtml(p.codigo)}" style="flex:1; min-width:0;" />
+              <button type="button" class="btn btn-ghost" id="btnScan" title="Escanear com a câmera">📷 Escanear</button>
+            </div>
+          </div>
         </div>
         <div class="modal-actions">
           <button type="button" class="btn btn-ghost" id="btnCancel">Cancelar</button>
@@ -104,6 +110,11 @@ export function renderProdutos(container, ctx) {
     `);
 
     document.getElementById('btnCancel').onclick = closeModal;
+
+    document.getElementById('btnScan').onclick = async () => {
+      const codigo = await escanearCodigo();
+      if (codigo) document.querySelector('#formProd [name="codigo"]').value = codigo;
+    };
 
     document.getElementById('formProd').onsubmit = (e) => {
       e.preventDefault();

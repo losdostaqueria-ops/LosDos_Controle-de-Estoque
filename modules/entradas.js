@@ -1,5 +1,6 @@
 import { Store } from './storage.js';
 import { toast, openModal, closeModal, escapeHtml, fmtDate, today, uid } from './utils.js';
+import { escanearCodigo } from '../scanner.js';
 
 const CASAS = [
   { key: 'entLD', label: 'LD' },
@@ -77,10 +78,13 @@ export function renderEntradas(container, ctx) {
         <div class="form-grid">
           <div class="field"><label>Data</label><input type="date" name="data" value="${today()}" required /></div>
           <div class="field"><label>Produto</label>
-            <select name="produtoId" required>
-              <option value="">Selecione...</option>
-              ${produtos.map(p => `<option value="${p.id}">${escapeHtml(p.nome)} (${p.unidade})</option>`).join('')}
-            </select>
+            <div style="display:flex; gap:8px;">
+              <select name="produtoId" required style="flex:1; min-width:0;">
+                <option value="">Selecione...</option>
+                ${produtos.map(p => `<option value="${p.id}">${escapeHtml(p.nome)} (${p.unidade})</option>`).join('')}
+              </select>
+              <button type="button" class="btn btn-ghost" id="btnScanEnt" title="Escanear com a câmera">📷</button>
+            </div>
           </div>
           <div class="field"><label>Quantidade Recebida</label><input type="number" name="qtd" step="0.01" min="0.01" required /></div>
         </div>
@@ -91,6 +95,13 @@ export function renderEntradas(container, ctx) {
       </form>
     `);
     document.getElementById('btnCancel').onclick = closeModal;
+    document.getElementById('btnScanEnt').onclick = async () => {
+      const codigo = await escanearCodigo();
+      if (!codigo) return;
+      const achado = produtos.find(x => String(x.codigo) === String(codigo));
+      if (achado) document.querySelector('#formEnt [name="produtoId"]').value = achado.id;
+      else toast('Código não cadastrado: ' + codigo, 'error');
+    };
     document.getElementById('formEnt').onsubmit = (e) => {
       e.preventDefault();
       const fd = Object.fromEntries(new FormData(e.target));
